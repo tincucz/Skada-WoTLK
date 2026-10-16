@@ -87,6 +87,65 @@ local was_in_party = nil
 local setPrototype = ns.setPrototype
 local classcolors = ns.classcolors
 
+-- Critters and throwaway adds whose combat events are dropped, so a stray cleave kill
+-- can't open or split a segment. IDs come from Tables.lua (ns.ignored_creatures); the
+-- name list is only a fallback and is gated to raids/dungeons because it is localized.
+local IGNORED_NAMES = {
+    ["Dig Rat"] = true, ["Spider"] = true, ["Rabbit"] = true, ["Squirrel"] = true,
+    ["Roach"] = true, ["Rat"] = true, ["Snake"] = true, ["Prairie Dog"] = true,
+    ["Critter"] = true, ["Black Rat"] = true, ["Blood Parasite"] = true,
+    ["Blood Spider"] = true, ["Frozen Insect"] = true, ["Plagued Insect"] = true
+}
+
+local function ShouldIgnoreCreature(guid, name)
+    if not guid then return false end
+
+    local id = GetCreatureId(guid)
+    if id ~= 0 and ns.ignored_creatures and ns.ignored_creatures[id] then
+        return true
+    end
+
+    if name then
+        local inInstance, instanceType = IsInInstance()
+        if inInstance and (instanceType == "raid" or instanceType == "party") and IGNORED_NAMES[name] then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Bosses whose death does not reliably drop the raid out of combat (leftover adds, a
+-- second copy of the boss, ...). Forcing a stop on their death keeps the next pull from
+-- being merged into the same segment.
+local FORCE_STOP_BOSSES = {
+    [37955] = "Blood Queen Lana'thel", -- Icecrown Citadel
+    [39863] = "Halion",                -- Ruby Sanctum (physical)
+    [40142] = "Halion",                -- Ruby Sanctum (twilight)
+    [39746] = "General Zarithrian",    -- Ruby Sanctum
+    [39747] = "Saviana Ragefire",      -- Ruby Sanctum
+    [39751] = "Baltharus the Warborn", -- Ruby Sanctum
+    [39899] = "Baltharus the Warborn", -- Ruby Sanctum (clone)
+}
+
+-- True while the Lich King is still above his final-phase threshold, i.e. the fight is in
+-- one of its brief out-of-combat transitions that must not close the segment. A stopped
+-- segment is never held (the caller checks that first).
+local LICH_KING_ID = 36597
+local function LKTransitioning()
+    local set = Skada.current
+    if not set or set.gotboss ~= LICH_KING_ID then return false end
+
+    for i = 1, 5 do
+        local unit = "boss"..i
+        if UnitExists(unit) and GetCreatureId(UnitGUID(unit)) == LICH_KING_ID then
+            local maxhp = UnitHealthMax(unit)
+            return maxhp > 0 and (UnitHealth(unit) / maxhp) > 0.11
+        end
+    end
+    return false
+end
+
 -------------------------------------------------------------------------------
 -- local functions.
 
@@ -1512,18 +1571,28 @@ do
 
 		t:ClearLines()
 
+		-- Section 1: Add Spells and Targets first.
+		if P.informativetooltips then
+			add_submode_lines(md.click1, win, id, label, t, class) -- Spells
+			add_submode_lines(md.click2, win, id, label, t, class) -- Targets
+		end
+
+		-- Section 2: Add a blank line for spacing after the Targets section.
+		t:AddLine(" ")
+
+		-- Section 3: Add the main "Activity" tooltip last.
 		if md.tooltip then
 			local numLines = t:NumLines()
 			md.tooltip(win, id, label, t)
 
+			-- This adds the second gap before the "Click for..." hints.
 			if t:NumLines() ~= numLines and hasClick then
 				t:AddLine(" ")
 			end
 		end
 
+		-- Section 4: Add the "Comparison" section if it exists.
 		if P.informativetooltips then
-			add_submode_lines(md.click1, win, id, label, t, class)
-			add_submode_lines(md.click2, win, id, label, t, class)
 			add_submode_lines(md.click3, win, id, label, t, class)
 		end
 
@@ -2403,15 +2472,15 @@ function Skada:OnInitialize()
 	self:RegisterComms(not P.syncoff)
 
 	-- fix things and remove others
-	P.setstokeep = min(25, max(0, P.setstokeep or 0))
-	P.setslimit = min(25, max(0, P.setslimit or 0))
+	P.setstokeep = min(50, max(0, P.setstokeep or 0))
+	P.setslimit = min(50, max(0, P.setslimit or 0))
 	P.timemesure = min(2, max(1, P.timemesure or 0))
 	P.totalflag = P.totalflag or 0x10
 	G.version, G.revision, G.inCombat = nil, nil, nil
 
 	-- sets limit
 	self.maxsets = P.setstokeep + P.setslimit
-	self.maxmeme = min(60, max(30, self.maxsets + 10))
+	self.maxmeme = min(150, max(30, self.maxsets + 10))
 
 	-- update references
 	classcolors = self.classcolors
@@ -2531,21 +2600,24 @@ end
 
 -- never initially registered.
 function Skada:PLAYER_REGEN_ENABLED()
-	self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-	if not self.current then return end
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    if not self.current then return end
 
-	-- we make sure to end the segment only if:
-	-- 	1. the segment was previously stopped.
-	-- 	2. the player and the group aren't in combat
-	if self.current.stopped or (not InCombatLockdown() and not IsGroupInCombat()) then
-		self:Debug("\124cffffbb00EndSegment\124r: PLAYER_REGEN_ENABLED")
-		combat_end()
-	end
+    if self.current.stopped or (not InCombatLockdown() and not IsGroupInCombat()) then
+        if self.current.stopped or not LKTransitioning() then
+            self:Debug("\124cffffbb00EndSegment\124r: PLAYER_REGEN_ENABLED")
+            combat_end()
+        end
+    end
 end
 
 function Skada:PLAYER_REGEN_DISABLED()
-	if not self.disabled and not self.current then
-		self:Debug("\124cffffbb00StartCombat\124r: PLAYER_REGEN_DISABLED")
+	if self.disabled or self.current then return end
+	if P.tentativecombatstart then
+		if UnitExists("target") and ShouldIgnoreCreature(UnitGUID("target"), UnitName("target")) then
+			return 
+		end
+		self:Debug("StartCombat: PLAYER_REGEN_DISABLED")
 		combat_start()
 	end
 end
@@ -2815,7 +2887,21 @@ do
 
 	local function combat_tick()
 		Skada._time = time()
-		if not Skada.disabled and Skada.current and not InCombatLockdown() and not IsGroupInCombat() and Skada.insType ~= "pvp" and Skada.insType ~= "arena" then
+
+		if Skada.disabled or not Skada.current then return end
+
+		-- A stopped segment (boss defeated, wipe, manual stop) is final. Close it even if
+		-- leftover adds keep the group in combat, so the next pull starts a fresh segment
+		-- instead of having its events dropped into the stopped one.
+		if Skada.current.stopped then
+			if Skada._time - (Skada.current.endtime or Skada._time) >= (P.smartwait or 3) then
+				Skada:Debug("\124cffffbb00EndSegment\124r: Combat Tick (stopped)")
+				combat_end()
+			end
+			return
+		end
+
+		if not InCombatLockdown() and not IsGroupInCombat() and Skada.insType ~= "pvp" and Skada.insType ~= "arena" and not LKTransitioning() then
 			Skada:Debug("\124cffffbb00EndSegment\124r: Combat Tick")
 			combat_end()
 		end
@@ -2968,8 +3054,12 @@ do
 
 		-- boss already detected?
 		if set.gotboss then
-			-- default boss defeated event? (no DBM/BigWigs)
-			if not Skada.bossmod and death_events[t.event] and set.gotboss == GetCreatureId(t.dstGUID) then
+			-- boss defeated: run our own detection in addition to the boss mod's, because not
+			-- every DBM/BigWigs module reports the end of its encounter (the Ruby Sanctum
+			-- mini-bosses have no DBM module at all, so nothing ever stopped their segment).
+			-- BossDefeated() bails on a set that is already finished, so a boss mod that
+			-- reports first still wins.
+			if death_events[t.event] and set.gotboss == GetCreatureId(t.dstGUID) then
 				bossdefeat_timer = bossdefeat_timer or Skada:ScheduleTimer(BossDefeated, 0.1)
 			end
 			return
@@ -2977,24 +3067,23 @@ do
 
 		-- marking set as boss fights relies only on src_is_interesting
 		if trigger_events[t.event] and src_is_interesting and not t:DestIsFriendly() then
-			if set.gotboss == nil then
-				if not _targets or not _targets[t.dstName] then
-					local isboss, bossid, bossname = Skada:IsEncounter(t.dstGUID, t.dstName)
-					if isboss then -- found?
-						set.mobname = bossname or set.mobname or t.dstName
-						set.gotboss = bossid or true
-						Skada:SendMessage("COMBAT_ENCOUNTER_START", set)
-						Skada:PrintFirstHit()
-						_targets = del(_targets)
-					else
-						_targets = _targets or new()
-						_targets[t.dstName] = true
-						set.gotboss = false
-					end
+			-- Keep looking for a boss even after a non-boss was hit first: walking into a
+			-- boss through its trash (the normal way into the Ruby Sanctum mini-bosses) used
+			-- to leave set.gotboss at false forever, so the boss was never flagged, the
+			-- segment kept the trash's name and nothing ever stopped it.
+			if not set.gotboss and (not _targets or not _targets[t.dstName]) then
+				local isboss, bossid, bossname = Skada:IsEncounter(t.dstGUID, t.dstName)
+				if isboss then -- found?
+					set.mobname = bossname or set.mobname or t.dstName
+					set.gotboss = bossid or true
+					Skada:SendMessage("COMBAT_ENCOUNTER_START", set)
+					Skada:PrintFirstHit()
+					_targets = del(_targets)
+				else
+					_targets = _targets or new()
+					_targets[t.dstName] = true
+					set.gotboss = false
 				end
-			elseif _targets and not _targets[t.dstName] then
-				_targets[t.dstName] = true
-				set.gotboss = nil
 			end
 		end
 	end
@@ -3032,109 +3121,106 @@ do
 	local dst_is_interesting = false
 
 	function Skada:OnCombatEvent(t)
-		-- ignored combat event?
-		if (not t.event or ignored_events[t.event]) and not (spellcast_events[t.event] and self.current) then return end
-
-		src_is_interesting = false
-		dst_is_interesting = false
-
-		if not self.current and trigger_events[t.event] and t.srcName and t.dstName and t.srcGUID ~= t.dstGUID then
-			src_is_interesting = t:SourceInGroup() or t:SourceIsPet(true)
-
-			if t.event ~= "SPELL_PERIODIC_DAMAGE" then
-				dst_is_interesting = t:DestInGroup() or t:DestIsPet(true)
-			end
-
-			if src_is_interesting or dst_is_interesting then
-				self.current = create_set(L["Current"], tentative_set)
-				self.total = self.total or create_set(L["Total"])
-
-				if tentative_timer then
-					self:CancelTimer(tentative_timer, true)
-					tentative_timer = nil
-				end
-
-				tentative_timer = self:ScheduleTimer(tentative_handler, 1)
-				tentative = P.tentativecombatstart and 4 or 0
-
-				check_boss_fight(self.current, t, src_is_interesting, dst_is_interesting)
-			end
-		end
-
-		-- pet summons.
-		if t.event == "SPELL_SUMMON" and t:SourceInGroup() and t:DestIsPet() then
-			summon_pet(t.dstGUID, t.srcGUID)
-		-- pet died?
-		elseif death_events[t.event] and guidToOwner[t.dstGUID] then
-			dismiss_pet(t.dstGUID, 1)
-		end
-
-		-- current segment not created?
-		if not self.current then return end
-
-		-- autostop on wipe enabled?
-		if P.autostop and (t.event == "UNIT_DIED" or t.event == "SPELL_RESURRECT") then
-			check_autostop(self.current, t.event, t:SourceInGroup(true))
-		end
-
-		-- stopped or invalid events?
-		if self.current.stopped or not combatlog_events[t.event] then return end
-
-		self._Time = GetTime()
-		check_cached_names(t)
-
-		for func, flags in next, combatlog_events[t.event] do
-			local fail = false
-
-			if flags.src_is_interesting_nopets then
-				if t:SourceInGroup(true) then
-					src_is_interesting = true
-				else
-					fail = true
-				end
-			end
-
-			if not fail and flags.dst_is_interesting_nopets then
-				if t:DestInGroup(true) then
-					dst_is_interesting = true
-				else
-					fail = true
-				end
-			end
-
-			if not fail and (flags.src_is_interesting or flags.src_is_not_interesting) then
-				src_is_interesting = t:SourceInGroup() or t:SourceIsPet(true) or GetTempUnit(t.srcGUID)
-				if (flags.src_is_interesting and not src_is_interesting) or (flags.src_is_not_interesting and src_is_interesting) then
-					fail = true
-				end
-			end
-
-			if not fail and (flags.dst_is_interesting or flags.dst_is_not_interesting) then
-				dst_is_interesting = t:DestInGroup() or t:DestIsPet(true)
-				if (flags.dst_is_interesting and not dst_is_interesting) or (flags.dst_is_not_interesting and dst_is_interesting) then
-					fail = true
-				end
-			end
-
-			if not fail then
-				if tentative ~= nil then
-					tentative = tentative + 1
-					self:Debug(format("\124cffffbb00Tentative\124r: %s (%d)", t.event, tentative))
-					if tentative >= 5 then
-						self:CancelTimer(tentative_timer, true)
-						tentative_timer = nil
-						tentative = nil
-						self:Debug("\124cffffbb00StartCombat\124r: tentative combat")
-						combat_start()
-					end
-				end
-
-				-- avoid the rest of the code out of combat
-				if not self.inCombat then return end
-				func(t)
-			end
-		end
-
-		check_boss_fight(self.current, t, src_is_interesting, dst_is_interesting)
+	if t.dstGUID and ShouldIgnoreCreature(t.dstGUID, t.dstName) then
+		return
 	end
+    if (not t.event or ignored_events[t.event]) and not (spellcast_events[t.event] and self.current) then return end
+
+    src_is_interesting = false
+    dst_is_interesting = false
+
+    if not self.current and trigger_events[t.event] and t.srcName and t.dstName and t.srcGUID ~= t.dstGUID then
+
+        src_is_interesting = t:SourceInGroup() or t:SourceIsPet(true)
+
+        if t.event ~= "SPELL_PERIODIC_DAMAGE" then
+            dst_is_interesting = t:DestInGroup() or t:DestIsPet(true)
+        end
+
+        if src_is_interesting or dst_is_interesting then
+            self.current = create_set(L["Current"], tentative_set)
+            self.total = self.total or create_set(L["Total"])
+
+            if tentative_timer then
+                self:CancelTimer(tentative_timer, true)
+                tentative_timer = nil
+            end
+
+            tentative_timer = self:ScheduleTimer(tentative_handler, 1)
+            tentative = P.tentativecombatstart and 4 or 0
+
+            check_boss_fight(self.current, t, src_is_interesting, dst_is_interesting)
+        end
+    end
+
+    if t.event == "SPELL_SUMMON" and t:SourceInGroup() and t:DestIsPet() then
+        summon_pet(t.dstGUID, t.srcGUID)
+    elseif death_events[t.event] and guidToOwner[t.dstGUID] then
+        dismiss_pet(t.dstGUID, 1)
+    end
+
+	if t.event == "UNIT_DIED" and t.dstGUID and self.current and not self.current.stopped then
+		local boss = FORCE_STOP_BOSSES[GetCreatureId(t.dstGUID)]
+		if boss then
+			self:StopSegment(boss.." defeated.")
+		end
+	end
+
+    if not self.current then return end
+
+    if P.autostop and (t.event == "UNIT_DIED" or t.event == "SPELL_RESURRECT") then
+        check_autostop(self.current, t.event, t:SourceInGroup(true))
+    end
+
+    if self.current.stopped or not combatlog_events[t.event] then return end
+
+    self._Time = GetTime()
+    check_cached_names(t)
+
+    for func, flags in next, combatlog_events[t.event] do
+        local fail = false
+        if flags.src_is_interesting_nopets then
+            if t:SourceInGroup(true) then
+                src_is_interesting = true
+            else
+                fail = true
+            end
+        end
+        if not fail and flags.dst_is_interesting_nopets then
+            if t:DestInGroup(true) then
+                dst_is_interesting = true
+            else
+                fail = true
+            end
+        end
+        if not fail and (flags.src_is_interesting or flags.src_is_not_interesting) then
+            src_is_interesting = t:SourceInGroup() or t:SourceIsPet(true) or GetTempUnit(t.srcGUID)
+            if (flags.src_is_interesting and not src_is_interesting) or (flags.src_is_not_interesting and src_is_interesting) then
+                fail = true
+            end
+        end
+        if not fail and (flags.dst_is_interesting or flags.dst_is_not_interesting) then
+            dst_is_interesting = t:DestInGroup() or t:DestIsPet(true)
+            if (flags.dst_is_interesting and not dst_is_interesting) or (flags.dst_is_not_interesting and dst_is_interesting) then
+                fail = true
+            end
+        end
+        if not fail then
+            if tentative ~= nil then
+                tentative = tentative + 1
+                self:Debug(format("\124cffffbb00Tentative\124r: %s (%d)", t.event, tentative))
+                if tentative >= 5 then
+                    self:CancelTimer(tentative_timer, true)
+                    tentative_timer = nil
+                    tentative = nil
+                    self:Debug("StartCombat: tentative combat")
+                    combat_start()
+                end
+            end
+            if not self.inCombat then return end
+            func(t)
+        end
+    end
+    check_boss_fight(self.current, t, src_is_interesting, dst_is_interesting)
+end
 end

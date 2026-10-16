@@ -135,6 +135,9 @@ do
 
 	-- formats value texts
 	function format_valuetext(d, cols, count, maxtime, metadata, subview, no_order)
+		-- FIX: Ensure count is always a number so FormatNumber doesn't crash
+		count = count or 0 
+		
 		d.valuetext = Skada:FormatValueCols(
 			cols.Uptime and Skada:FormatTime(d.value),
 			cols.Count and Skada:FormatNumber(count),
@@ -240,9 +243,10 @@ do
 		local spell = actor.auras and actor.auras[aura.spellid]
 		if not spell then
 			actor.auras = actor.auras or {}
-			actor.auras[aura.spellid] = {u = 1}
+			actor.auras[aura.spellid] = {u = 1, n = 1} -- FIX: Initialize count (n)
 		else
 			spell.u = (spell.u or 0) + 1
+			spell.n = (spell.n or 0) + 1 -- FIX: Increment count (n)
 		end
 	end
 

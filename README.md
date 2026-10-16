@@ -1,78 +1,78 @@
-# Skada for Wrath of the Lich King `3.3.5` (_Revisited - v1.8.86_)
+# Skada-WoTLK — Tuan's fork
 
-![Discord](https://img.shields.io/discord/795698054371868743?label=discord)
-![GitHub last commit](https://img.shields.io/github/last-commit/bkader/Skada-WoTLK)
-![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/bkader/Skada-WoTLK?label=version)
+A private-server fork of **[bkader/Skada-WoTLK](https://github.com/bkader/Skada-WoTLK)**, the
+Wrath of the Lich King `3.3.5` rewrite of Skada.
 
-Skada is a modular damage meter with various viewing modes, segmented fights and customizable windows. It aims to be highly efficient with memory and CPU.
+![GitHub last commit](https://img.shields.io/github/last-commit/tincucz/Skada-WoTLK)
+![Version](https://img.shields.io/badge/version-1.8.88-blue)
+![Interface](https://img.shields.io/badge/interface-30300-lightgrey)
 
-<p align="center"><img src="https://user-images.githubusercontent.com/4732702/170839578-72a9a952-c999-457a-8f57-7d151e3b76a8.png" alt="Skada WotLK"></p>
+> **Base:** upstream tag `1.8.87` (2024-03-23) · **This fork:** `1.8.88`
+> **Full breakdown:** **[`Skada/FORK-TUAN.md`](Skada/FORK-TUAN.md)** — every changed file, diffed
+> line by line against upstream.
 
-_**FOR PRIVATE SERVERS**_:
-* _[Cataclysm](https://github.com/bkader/Skada-Cata)_
-* _[Mists of Pandaria](https://github.com/bkader/Skada-MoP)_
-* _[Warlords of Draenor](https://github.com/bkader/Skada-WoD)_
-* _[Legion](https://github.com/bkader/Skada-Legion)_
-* _[Battle for Azeroth](https://github.com/bkader/Skada-BfA)_
-* _[Shadowlands](https://github.com/bkader/Skada-Shadowlands)_
+This is upstream Skada with a focused set of **raid-segment fixes** aimed at Warmane
+(Icecrown). Nothing else was touched: no files added, none removed, same 172 files as upstream.
 
-_**FOR OFFICIAL SERVERS**_:
-* _[Retail/Classic Wrath](https://github.com/bkader/Skada-Damage-Meter)_
+---
 
-> ***Is this a backported version?***
-> **No**! This is total **rewrite** of the original addon, it all started from version `r301` for `3.3.5`and built up to the current state.
+## What's different from upstream
 
-## IMPORTANT: How to install
+### Segment lifecycle
+Upstream ends a segment by asking the boss mod and then waiting for the *whole group* to leave
+combat. On this realm that merges pulls and cuts fights in half. This fork:
 
-1. If you used the default on **Skada** before, please make sure to delete all its files from `Interface\AddOns` folder as well as all its _SavedVariables_ from `WTF` folder (_just delete all `Skada.lua` and `Skada.lua.bak` for this folder. Use the search box for quick delete_). If you are new, skip this step.
-2. [Download the package](https://github.com/bkader/Skada-WoTLK/archive/refs/heads/main.zip).
-3. Open the Zip package inside which you will find a single folder named `Skada-WoTLK-main`.
-4. Extract or drag and drop the unique folder `Skada` into your `Interface\AddOns` folder.
-5. If you want to use `SkadaImprovement` and/or `SkadaStorage` modules, drop them there as well.
+- **Force-stops segments on boss death** for bosses whose death does not reliably drop the raid
+  out of combat — Blood Queen Lana'thel, both Halion forms, and the Ruby Sanctum mini-bosses
+  (Zarithrian, Saviana, Baltharus + clone).
+- **Closes a stopped segment** after `smartwait` (3s) even if leftover adds keep the group in
+  combat, instead of waiting for a `PLAYER_REGEN_ENABLED` that may never come.
+- **Self-detects boss deaths even with DBM loaded.** Upstream only did this when no boss mod was
+  present; DBM's Ruby Sanctum module never reports `EndCombat`, so nothing ever stopped those
+  segments.
+- **Detects a boss after its trash.** Walking into a boss through trash used to leave the segment
+  named after the trash forever, and nothing stopped it.
 
-## Show Love & Support
+### Filters
+- `ignored_creatures` is populated (upstream ships it empty): Icecrown Citadel critters and
+  common critters (Dig Rats, Ogre Pinata).
+- Name-keyed fallback (`ShouldIgnoreCreature`) so a stray cleave kill on a critter cannot open or
+  split a segment.
+- **The nickname forbidden-word filter was removed.** The 275-word blacklist and its check are
+  gone; the length / character / repeated-letter checks remain.
+- `grouped_units` gained name-keyed fallbacks for the Lady Deathwhisper adds.
 
-Though it's not required, **PayPal**/**Paysera** donations are most welcome at **bkader[at]mail.com**.
+### Lich King
+- Segments are held open during the Lich King's brief out-of-combat transitions (while he is
+  above his final-phase threshold), so his phase changes cannot split the encounter.
 
-## Special Credits
+### Custom units & frozen DPS
+- Custom phase entries for **Sindragosa** (ground phase with a `stop_time`) and her **Ice Tomb**.
+- Once a custom unit's `stop_time` elapses, elapsed time is snapshotted onto the actor so its
+  DPS/DTPS **stops fluctuating** instead of drifting for the rest of the fight.
 
-* Original author: **Zarnivoop**
-* Localization: **meatgaga** (CN), **Ícar** & **Septimun** (ES), **Kader** (FR), **NGL** (RU)
-* Direct and indirect contributors: **Abel**, **Iqui**, **Jeb**, **Shoggoth**, **Havi** & **Ganrod**, **WotLK Community**.
-* The man behind the wheel: **[Nomadra](https://github.com/ridepad)**
+### Fixes
+- Aura stack counts are initialised, so `FormatNumber` can't be handed `nil`.
+- Two options sliders raised from 25 to 50; segment counts clamped to a sane range.
+- Tooltip layout reworked (spells/targets → activity → comparison).
 
-## Early Access
+> **Known divergence:** `Modules/Potions.lua` is reindented (tabs → 4 spaces) and trails upstream
+> 1.8.87 by a few entries. It is not an intentional change — see the note in `FORK-TUAN.md`.
 
-If like some you cannot wait for updates to be pushed and releases to be published, visit [this link](https://mega.nz/folder/3gZFXa5T#nO6nqnv6gj1IYpCu4CJWaQ) and download the version (_expansion_) you want to use. Every time a progress is done and a milestone is reached, packages are updated, so you might want to check the date files were updated so you don't download the same package again (_compare date added to the in-game Skada date_).
-_Note that **3.4.x.zip** is for both **Retail** and **Classic Wrath**._
+---
 
-## OTHER ADDONS (Private Servers)
+## Install
 
-* **!ElvinCDs**: [https://github.com/bkader/ElvinCDs](https://github.com/bkader/ElvinCDs)
-* **!KTracker**: [https://github.com/bkader/KTracker](https://github.com/bkader/KTracker)
-* **BigWigs**: [https://github.com/bkader/BigWigs-WoTLK](https://github.com/bkader/BigWigs-WoTLK)
-* **BloodyMask**: [https://github.com/bkader/BloodyMask](https://github.com/bkader/BloodyMask)
-* **ButtonFacade**: [https://github.com/bkader/ButtonFacade](https://github.com/bkader/ButtonFacade)
-* **Comix**: [https://github.com/bkader/Comix-WoTLK](https://github.com/bkader/Comix-WoTLK)
-* **Crosshairs**: [https://github.com/bkader/Crosshairs-WotLK](https://github.com/bkader/Crosshairs-WotLK)
-* **Dominos**: [https://github.com/bkader/Dominos](https://github.com/bkader/Dominos)
-* **EclipseBar**: [https://github.com/bkader/EclipseBar-WotLK](https://github.com/bkader/EclipseBar-WotLK)
-* **FixGroups**: [https://github.com/bkader/FixGroups-WoTLK](https://github.com/bkader/FixGroups-WoTLK)
-* **GarbageProtector**: [https://github.com/bkader/GarbageProtector](https://github.com/bkader/GarbageProtector)
-* **Grid2**: [https://github.com/bkader/Grid2-WoTLK](https://github.com/bkader/Grid2-WoTLK)
-* **HalionHelper**: [https://github.com/bkader/HalionHelper-WoTLK](https://github.com/bkader/HalionHelper-WoTLK)
-* **Hermes**: [https://github.com/bkader/Hermes-WotLK](https://github.com/bkader/Hermes-WotLK)
-* **KPack**: [https://github.com/bkader/KPack](https://github.com/bkader/KPack)
-* **KRaidTools**: [https://github.com/bkader/KRT](https://github.com/bkader/KRT)
-* **KRaidUtilities**: [https://github.com/bkader/KRU-WoTLK](https://github.com/bkader/KRU-WoTLK)
-* **KuiNameplates**: [https://github.com/bkader/KuiNameplates-WoTLK](https://github.com/bkader/KuiNameplates-WoTLK)
-* **Masque**: [https://github.com/bkader/Masque-WoTLK](https://github.com/bkader/Masque-WoTLK)
-* **NameplateSCT**: [https://github.com/bkader/NameplateSCT_WoTLK](https://github.com/bkader/NameplateSCT_WoTLK)
-* **PlateBuffs**: [https://github.com/bkader/PlateBuffs_WoTLK](https://github.com/bkader/PlateBuffs_WoTLK)
-* **RUF**: [https://github.com/bkader/RUF-WoTLK](https://github.com/bkader/RUF-WoTLK)
-* **Raven**: [https://github.com/bkader/Raven-WotLK](https://github.com/bkader/Raven-WotLK)
-* **SharedMedia**: [https://github.com/bkader/SharedMedia](https://github.com/bkader/SharedMedia)
-* **Talented**: [https://github.com/bkader/Talented_WoTLK](https://github.com/bkader/Talented_WoTLK)
-* **TellMeWhen**: [https://github.com/bkader/TellMeWhen_3.3.5](https://github.com/bkader/TellMeWhen_3.3.5)
-* **TheClassicRace**: [https://github.com/bkader/TheClassicRace-WotLK](https://github.com/bkader/TheClassicRace-WotLK)
-* **TidyPlates & ThreatPlates**: [https://github.com/bkader/TidyPlates_WoTLK](https://github.com/bkader/TidyPlates_WoTLK)
+1. If you used Skada before, delete its files from `Interface\AddOns` **and** all `Skada.lua` /
+   `Skada.lua.bak` from your `WTF` folder.
+2. Drop the `Skada` folder from this repo into `Interface\AddOns`.
+3. Optional: `SkadaImprovement` and `SkadaStorage` are included here too.
+
+## Credits & license
+
+- Original addon: **Zarnivoop**
+- WotLK rewrite (`1.8.x`): **bkader** ([Skada-WoTLK](https://github.com/bkader/Skada-WoTLK))
+- This fork: **Tuan** — raid-segment fixes for a private `3.3.5a` realm
+
+Licensed under **MIT/X** (see [`LICENSE.md`](LICENSE.md)). Upstream copyright and attribution are
+retained in full; this fork claims nothing over the original work.

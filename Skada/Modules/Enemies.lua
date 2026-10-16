@@ -146,6 +146,7 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 		t.full = maxval
 		t.power = (unit.power ~= nil)
 		t.useful = unit.useful
+		t.stop_time = unit.stop_time
 
 		return t
 	end
@@ -390,6 +391,19 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 
 		for i = 1, #units do
 			local unit = units[i]
+
+			if unit and not unit.done and unit.stop_time then
+				local current_time = time()
+				local start_time = (set and set.starttime) or current_time
+				
+				if (current_time - start_time) > unit.stop_time then
+					unit.done = true
+					-- FIX: Snapshot the time on the actor so DPS stops fluctuating
+					local e = Skada:GetActor(set, unit.name, unit.name, true)
+					if e then e.fixed_time = unit.stop_time end
+				end
+			end
+
 			if not unit or unit.done then
 				-- nothing to do
 			elseif unit.full then -- started with less than max?
@@ -686,6 +700,12 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 		for actorname, actor in pairs(actors) do
 			if actor.enemy then
 				local dtps, amount = actor:GetDTPS(set, nil, not mode_cols.sDTPS)
+
+				-- FIX: Use the frozen time for DPS calculation if it exists
+				if actor.fixed_time and amount > 0 then
+					dtps = amount / max(1, actor.fixed_time)
+				end
+
 				if amount and amount > 0 then
 					nr = nr + 1
 
@@ -1109,9 +1129,9 @@ Skada:RegisterModule("Enemy Damage Done", function(L, P, _, C)
 	end
 
 	function mode:Update(win, set)
-		win.title = L["Enemy Damage Done"]
+		win.title = L["Enemy Damage Taken"]
 
-		local total = set and set:GetEnemyDamage()
+		local total = set and set:GetDamageTaken(win.class, true)
 		if not total or total == 0 then
 			return
 		elseif win.metadata then
@@ -1119,17 +1139,23 @@ Skada:RegisterModule("Enemy Damage Done", function(L, P, _, C)
 		end
 
 		local nr = 0
-		local actors = set.actors -- enemies
+		local actors = set.actors
 
 		for actorname, actor in pairs(actors) do
-			if actor.enemy and not actor.fake then
-				local dps, amount = actor:GetDPS(set, false, false, not mode_cols.DPS)
+			if actor.enemy then
+				local dtps, amount = actor:GetDTPS(set, nil, not mode_cols.sDTPS)
+
+				-- FIX: If the actor has a fixed time (from our custom unit), use it for DPS
+				if actor.fixed_time and amount > 0 then
+					dtps = amount / max(1, actor.fixed_time)
+				end
+
 				if amount and amount > 0 then
 					nr = nr + 1
 
 					local d = win:actor(nr, actor, actor.enemy, actorname)
 					d.value = amount
-					format_valuetext(d, total, dps, win.metadata)
+					format_valuetext(d, total, dtps, win.metadata, nil, actor.fake)
 				end
 			end
 		end

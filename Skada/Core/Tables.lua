@@ -121,7 +121,27 @@ local ignored_spells = {
 -- ignored creautre ids (use creature ID: [cretureID] = true)
 -- a list of creature IDs of which CLEU <<DAMAGE>> events are ignored.
 
-local ignored_creatures = {}
+local ignored_creatures = {
+		-- Icecrown Citadel Critters
+	[37914] = true,  -- Black Rat (ICC)
+	[37915] = true,  -- Blood Parasite (ICC)
+	[36649] = true,  -- Blood Spider (ICC)
+	[37782] = true,  -- Frozen Insect (ICC)
+	[37783] = true,  -- Plagued Insect (ICC)
+	[38228] = true,  -- Plagued Insect (ICC)
+	[38231] = true,  -- Plagued Insect (ICC)
+	[38232] = true,
+	[38229] = true,
+	[38370] = true,
+	[38369] = true,
+
+	-- Common Critters
+	[1420] = true,   -- Dig Rat
+	[3444] = true,   -- Dig Rat
+	[2110] = true,   -- Dig Rat
+	[34632] = true,   -- Ogre Pinata
+}
+ns.ignored_creatures = ignored_creatures
 
 -------------------------------------------------------------------------------
 -- misc tables
@@ -476,6 +496,13 @@ do
 		[38135] = L["Adds"], -- Deformed Fanatic
 		[38009] = L["Adds"], -- Reanimated Fanatic
 		[38472] = L["Adds"], -- Darnavan
+		["Cult Adherent"] = "Adds",
+        ["Empowered Adherent"] = "Adds",
+        ["Reanimated Adherent"] = "Adds",
+        ["Cult Fanatic"] = "Adds",
+        ["Deformed Fanatic"] = "Adds",
+        ["Reanimated Fanatic"] = "Adds",
+        ["Darnavan"] = "Adds",
 
 		-- Halion: Halion and Inferno
 		[39863] = L["Halion and Inferno"], -- Halion
@@ -529,10 +556,18 @@ do
 		},
 
 		-- ICC: Sindragosa
-		[36853] = {
-			text = L["%s - Phase 2"],
-			start = 0.35
-		},
+        [36853] = {
+            {text = "%s - Ground Phase (0-52s)", start = 1, stop_time = 52},
+            {text = L["%s - Phase 2"], start = 0.35}
+        },
+
+
+		-- ICC: Sindragosa Ice Tomb
+        [36980] = {
+            name = "Ice Tomb (< 15%)",
+            start = 0.15
+        },
+
 
 		-- ICC: The Lich King
 		[36597] = {
