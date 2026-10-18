@@ -147,6 +147,7 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 		t.power = (unit.power ~= nil)
 		t.useful = unit.useful
 		t.stop_time = unit.stop_time
+		t.starttime = time() -- FIX: when this custom unit appeared, for freezing DPS later
 
 		return t
 	end
@@ -450,6 +451,11 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 					log_custom_unit(set, unit.name, srcName, spellid, amount - delta, absorbed)
 					Skada:Debug(format("[%s] \124cffffbb00Stopped\124r", unit.name))
 					unit.done = true
+					-- FIX: a custom unit that finishes on its own (Ice Tomb destroyed, ...) must freeze its
+					-- elapsed time too, otherwise its DPS/DTPS keeps climbing with the segment until the
+					-- boss dies.
+					local ue = Skada:GetActor(set, unit.name, unit.name, true)
+					if ue then ue.fixed_time = max(1, time() - (unit.starttime or time())) end
 				else
 					log_custom_unit(set, unit.name, srcName, spellid, amount, absorbed)
 				end

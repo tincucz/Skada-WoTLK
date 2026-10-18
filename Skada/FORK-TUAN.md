@@ -22,7 +22,8 @@ fork's edits were written with 4-space indentation while upstream uses tabs.
 |---|---|---|---|
 | `Core/Core.lua` | 112 | 26 | the main body of work |
 | `Core/Tables.lua` | 38 | 3 | ignore list + groupings + custom phases |
-| `Modules/Enemies.lua` | 32 | 6 | frozen-time DPS |
+| `Modules/Enemies.lua` | 38 | 6 | frozen-time DPS + custom-unit lifetime |
+| `Core/Functions.lua` | 8 | 0 | central frozen-time in `GetActiveTime` |
 | `Modules/Nickname.lua` | 3 | 282 | forbidden-word filter **removed** |
 | `Modules/Potions.lua` | 36 | 33 | reindent + older revision (see notes) |
 | `Modules/Auras.lua` | 5 | 0 | aura stack-count fix |
@@ -106,6 +107,14 @@ leave combat. On Warmane that leaves pulls merged and fights cut in half. Change
   `unit.stop_time`, the elapsed time is snapshotted onto the actor (`actor.fixed_time`) and
   `unit.done` is set, so its DPS/DTPS **stops fluctuating** instead of drifting as the fight
   continues. Used for Sindragosa's ground phase.
+- **`Modules/Enemies.lua`** — custom units now record their own start time (`t.starttime`), and a
+  unit that finishes by itself (`unit.curval <= unit.minval`, e.g. an Ice Tomb being destroyed)
+  stamps `actor.fixed_time` with its **real elapsed lifetime**. Previously only the `stop_time`
+  path froze anything, so self-finishing units kept dividing by the live segment time.
+- **`Core/Functions.lua`** — the freeze is applied centrally in `Skada:GetActiveTime`, which every
+  DPS/DTPS getter funnels through. Before this, only two `mode:Update` spots in `Enemies.lua`
+  honoured `actor.fixed_time`; drill-downs, set summaries and tooltips still divided by the
+  growing segment time, so a frozen unit's number kept falling forever after the freeze point.
 
 ## 5. Fixes
 

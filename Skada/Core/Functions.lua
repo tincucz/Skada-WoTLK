@@ -1018,6 +1018,14 @@ end
 
 -- returns the actor's active/effective time
 function Skada:GetActiveTime(set, actor, active)
+	-- A custom unit that has finished -- either by reaching its own stop_time or by being
+	-- destroyed -- carries a frozen duration. Report that instead of the live segment time, so
+	-- its DPS/DTPS stops moving in EVERY view (overview row, drill-down, set summary), not just
+	-- in the two mode:Update overrides that used to patch it up.
+	if actor and actor.fixed_time then
+		return max(1, actor.fixed_time)
+	end
+
 	-- force active for pvp/arena
 	active = active or (set and (set.type == "pvp" or set.type == "arena"))
 
