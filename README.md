@@ -1,4 +1,4 @@
-# Skada-WoTLK — Tuan's fork
+# Skada-WoTLK-3.3.5a — Tuan's fork
 
 A private-server fork of **[bkader/Skada-WoTLK](https://github.com/bkader/Skada-WoTLK)**, the
 Wrath of the Lich King `3.3.5` rewrite of Skada.
