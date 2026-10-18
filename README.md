@@ -4,10 +4,10 @@ A private-server fork of **[bkader/Skada-WoTLK](https://github.com/bkader/Skada-
 Wrath of the Lich King `3.3.5` rewrite of Skada.
 
 ![GitHub last commit](https://img.shields.io/github/last-commit/tincucz/Skada-WoTLK)
-![Version](https://img.shields.io/badge/version-1.8.88-blue)
+![Version](https://img.shields.io/badge/version-1.8.89-blue)
 ![Interface](https://img.shields.io/badge/interface-30300-lightgrey)
 
-> **Base:** upstream tag `1.8.87` (2024-03-23) · **This fork:** `1.8.88`
+> **Base:** upstream tag `1.8.87` (2024-03-23) · **This fork:** `1.8.89`
 > **Full breakdown:** **[`Skada/FORK-TUAN.md`](Skada/FORK-TUAN.md)** — every changed file, diffed
 > line by line against upstream.
 

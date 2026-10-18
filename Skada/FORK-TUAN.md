@@ -5,7 +5,7 @@ A private fork of **[bkader/Skada-WoTLK](https://github.com/bkader/Skada-WoTLK)*
 | | |
 |---|---|
 | **Upstream base** | `bkader/Skada-WoTLK` tag **1.8.87** (2024-03-23) |
-| **This fork** | **1.8.88** — `## Author: Kader (bkader#5341), edited by Tuan` |
+| **This fork** | **1.8.89** — `## Author: Kader (bkader#5341), edited by Tuan` |
 | **Client** | 3.3.5a (`## Interface: 30300`) |
 | **Scope** | private use only — raid-segment correctness on Warmane Icecrown |
 
@@ -115,6 +115,9 @@ leave combat. On Warmane that leaves pulls merged and fights cut in half. Change
   DPS/DTPS getter funnels through. Before this, only two `mode:Update` spots in `Enemies.lua`
   honoured `actor.fixed_time`; drill-downs, set summaries and tooltips still divided by the
   growing segment time, so a frozen unit's number kept falling forever after the freeze point.
+- **Verified in-game** on Warmane Icecrown, 25H Sindragosa: the Ground Phase row holds its DTPS
+  steady after the 52s mark in both the overview and the drill-down, instead of falling until the
+  boss dies.
 
 ## 5. Fixes
 
