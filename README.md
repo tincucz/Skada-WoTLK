@@ -3,7 +3,7 @@
 A private-server fork of **[bkader/Skada-WoTLK](https://github.com/bkader/Skada-WoTLK)**, the
 Wrath of the Lich King `3.3.5` rewrite of Skada.
 
-![GitHub last commit](https://img.shields.io/github/last-commit/tincucz/Skada-WoTLK)
+![GitHub last commit](https://img.shields.io/github/last-commit/tuanus/Skada-WoTLK-3.3.5a)
 ![Version](https://img.shields.io/badge/version-1.8.89-blue)
 ![Interface](https://img.shields.io/badge/interface-30300-lightgrey)
 
