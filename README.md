@@ -63,10 +63,11 @@ combat. On this realm that merges pulls and cuts fights in half. This fork:
 
 ## Install
 
-1. If you used Skada before, delete its files from `Interface\AddOns` **and** all `Skada.lua` /
+1. If you used Skada before (different version from bkader's Skada)
+   , delete its files from `Interface\AddOns` **and** all `Skada.lua` /
    `Skada.lua.bak` from your `WTF` folder.
-2. Drop the `Skada` folder from this repo into `Interface\AddOns`.
-3. Optional: `SkadaImprovement` and `SkadaStorage` are included here too.
+3. Drop the `Skada` folder from this repo into `Interface\AddOns`.
+4. Optional: `SkadaImprovement` and `SkadaStorage` are included here too.
 
 ## Credits & license
 
